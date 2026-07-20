@@ -8,12 +8,6 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23C8102E'/%3E%3Ctext x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='Georgia' font-weight='bold'%3E♞%3C/text%3E%3C/svg%3E"/>
 <style>body{margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif;background:#F4F5F7}*{box-sizing:border-box}</style>
 
-<!-- React 18 + Babel (in-browser JSX transform, no build step needed).
-     Charts are custom CSS divs (no Recharts) to minimize external dependencies. -->
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
 <!-- Firebase v9+ modular SDK (Firestore) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -32,25 +26,85 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
   window.__fb = { db, doc, setDoc, collectionGroup, onSnapshot };
 </script>
 </head>
 <body>
 <div id="root">
-  <div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#888">Loading GHGGibPro™…</div>
+  <div id="ghg-loading" style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#888">Loading GHGGibPro™… <br/><span style="font-size:12px" id="ghg-loadstate">fetching libraries</span></div>
 </div>
+
+<!-- Multi-CDN loader: tries jsDelivr → cdnjs (Cloudflare) → unpkg for each library.
+     If one CDN is blocked on the viewer's network, the next is tried automatically. -->
 <script>
+(function(){
+  var state = document.getElementById('ghg-loadstate');
+  function setState(t){ if(state) state.textContent = t; }
+  function fail(lib){
+    window.__ghgFailed = true;
+    document.getElementById('root').innerHTML =
+      '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#C62828">'
+      + '<b>The platform failed to load.</b><br/>Could not download the <b>' + lib + '</b> library '
+      + 'from any of 3 content networks (jsDelivr, Cloudflare, unpkg).<br/>'
+      + 'This usually means a firewall or network filter is blocking script downloads. '
+      + 'Try a different network (e.g. mobile hotspot) or contact IT.</div>';
+  }
+  function loadOne(urls, i, cb){
+    if(i >= urls.length){ cb(false); return; }
+    var s = document.createElement('script');
+    s.src = urls[i];
+    s.onload = function(){ cb(true); };
+    s.onerror = function(){ loadOne(urls, i+1, cb); };
+    document.head.appendChild(s);
+  }
+  var REACT = [
+    'https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js',
+    'https://unpkg.com/react@18.3.1/umd/react.production.min.js'
+  ];
+  var RDOM = [
+    'https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js',
+    'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js'
+  ];
+  var BABEL = [
+    'https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js',
+    'https://unpkg.com/@babel/standalone@7/babel.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/8.0.4/babel.min.js'
+  ];
+  setState('loading React…');
+  loadOne(REACT, 0, function(ok){
+    if(!ok || !window.React){ fail('React'); return; }
+    setState('loading ReactDOM…');
+    loadOne(RDOM, 0, function(ok){
+      if(!ok || !window.ReactDOM){ fail('ReactDOM'); return; }
+      setState('loading Babel compiler…');
+      loadOne(BABEL, 0, function(ok){
+        if(!ok || !window.Babel){ fail('Babel'); return; }
+        setState('compiling application…');
+        try {
+          window.Babel.transformScriptTags();
+        } catch(e){
+          window.__ghgFailed = true;
+          document.getElementById('root').innerHTML =
+            '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#C62828">'
+            + '<b>The platform failed to compile.</b><br/><code style="font-size:11px">'
+            + String(e.message).replace(/</g,'&lt;') + '</code></div>';
+        }
+      });
+    });
+  });
+  // Last-resort watchdog: 45s, and only if nothing rendered AND no specific failure shown
   setTimeout(function(){
-    if(!window.__ghgRendered){
+    if(!window.__ghgRendered && !window.__ghgFailed){
       document.getElementById('root').innerHTML =
         '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#C62828">'
-        + '<b>The platform failed to load.</b><br/>This usually means one of the external '
-        + 'libraries (React or Babel) did not load. Check your internet connection and refresh. '
-        + 'If it keeps happening, contact support.</div>';
+        + '<b>The platform is taking too long to load.</b><br/>Check your internet connection and refresh.</div>';
     }
-  }, 6000);
+  }, 45000);
+})();
 </script>
+
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useCallback } = React;
 
